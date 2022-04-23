@@ -128,7 +128,6 @@ size_t MegaDL::fetch_url()
 	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &output);
 	// curl_easy_setopt(curl, CURLOPT_USERAGENT, API_AGENT);
-	// curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
 	// curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 	// curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
 	// curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
@@ -162,28 +161,51 @@ std::string MegaDL::get_url()
 	return url;
 }
 
-void MegaDL::download(std::ofstream &file, std::function<bool(cpr::cpr_off_t downloadTotal, cpr::cpr_off_t downloadNow, cpr::cpr_off_t uploadTotal, cpr::cpr_off_t uploadNow, intptr_t userdata)> p_callback)
+void MegaDL::download(std::string path, int (*progress_callback)(void *, double, double, double, double))
 {
-	cpr::Get(
-		cpr::Url{get_url()},
-		cpr::WriteCallback(
-			[&](std::string data, intptr_t userdata) -> bool
-			{
-				std::string output;
+	output.open(path+get_id());
+	std::string url = get_url();
 
-				CryptoPP::StringSource s(
-					data, true, 
-					new CryptoPP::StreamTransformationFilter(
-						aes,
-						new CryptoPP::StringSink(output)
-					)
-				);
+	auto curl = curl_easy_init();
+	curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, this);
+	// curl_easy_setopt(curl, CURLOPT_USERAGENT, API_AGENT);
+	// curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+	// curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+	// curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+	curl_easy_setopt(
+		curl, 
+		CURLOPT_WRITEFUNCTION, 
+		+[](void *buffer, size_t size, size_t nmemb, void *userp) -> size_t 
+		{
+			MegaDL* instance = reinterpret_cast<MegaDL*>(userp);
 
-				file << output;
+			size_t actual_size = size * nmemb;			
 
-				return true;
-			}
-		),
-		cpr::ProgressCallback(p_callback)
+			std::string output;
+			CryptoPP::StringSource s(
+				reinterpret_cast<CryptoPP::byte*>(buffer), actual_size, true, 
+				new CryptoPP::StreamTransformationFilter(
+					instance->aes,
+					new CryptoPP::StringSink(output)
+				)
+			);
+			
+			instance->output << output;
+
+			return actual_size;
+		}
 	);
+	curl_easy_setopt(
+		curl, 
+		CURLOPT_PROGRESSFUNCTION, 
+		progress_callback
+	);
+
+	curl_easy_perform(curl);
+
+	output.close();
+
+	curl_easy_cleanup(curl);
 }

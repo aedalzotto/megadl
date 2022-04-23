@@ -1,8 +1,8 @@
 #pragma once
 
 #include <string>
+#include <fstream>
 
-#include <cpr/cpr.h>
 #include <cryptopp/aes.h>
 #include <cryptopp/modes.h>
 
@@ -74,23 +74,18 @@ public:
 	 * @throw std::runtime_error on empty URL
 	 * 
 	 * @param file File object to write to
-	 * @param p_callback Progress callback
+	 * @param progress_callback Pointer to progress callback function. Nullptr to use standard.
 	 */
 	void download(
-		std::ofstream &file, 
-		std::function<bool(
-			cpr::cpr_off_t downloadTotal, 
-			cpr::cpr_off_t downloadNow, 
-			cpr::cpr_off_t uploadTotal, 
-			cpr::cpr_off_t uploadNow, 
-			intptr_t userdata
-		)> p_callback
+		std::string path, 
+		int (*progress_callback)(void *, double, double, double, double)
 	);
 
 private:
 	CryptoPP::CTR_Mode<CryptoPP::AES>::Decryption aes;
 	std::string id;
 	std::string url;
+	std::ofstream output;
 
 	std::pair<std::string, std::string> decode_url(std::string url);
 	std::string decode_id();

@@ -1,5 +1,4 @@
 #include <iostream>
-#include <fstream>
 
 #include <boost/program_options.hpp>
 
@@ -43,16 +42,9 @@ int main(int argc, char* argv[])
 		std::cout << "Real URL: " << file.get_url() << std::endl;
 		std::cout << "Size: " << size << std::endl;
 
-		std::ofstream fp(file.get_id());
-
 		file.download(
-			fp, 
-			[&](cpr::cpr_off_t downloadTotal, cpr::cpr_off_t downloadNow, cpr::cpr_off_t uploadTotal, cpr::cpr_off_t uploadNow, intptr_t userdata) -> bool
-			{
-				if(downloadTotal >0)
-					std::cout << "\rDownloaded " << downloadNow << " / " << downloadTotal << " bytes.";
-				return true;
-			}
+			"./", 
+			nullptr
 		);
 		
 		std::cout << std::endl;
