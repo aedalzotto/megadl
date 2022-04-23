@@ -18,7 +18,7 @@ CFLAGS   = -Wall -O2
 
 $(TARGET): $(LIBTGT) $(SRCOBJ)
 	@echo "Linking $@..."
-	@$(CXX) $^ -o $@ -L . -l$(TARGET) -lcpr -lcryptopp -lboost_program_options
+	@$(CXX) $^ -o $@ -L . -l$(TARGET) -lcpr -lcryptopp -lboost_program_options -lcurl
 
 lib: $(LIBTGT)
 

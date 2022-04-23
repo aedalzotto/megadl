@@ -4,6 +4,8 @@
 #include <cryptopp/secblock.h>
 #include <cryptopp/base64.h>
 
+#include <curl/curl.h>
+
 #include "MegaDL.hpp"
 
 using json = nlohmann::json;
@@ -117,13 +119,36 @@ size_t MegaDL::fetch_url()
 		}
 	});
 
-	cpr::Response r = cpr::Post(
-		cpr::Url{"https://g.api.mega.co.nz/cs"},
-        cpr::Body{request.dump()},
-		cpr::Header{{"Content-Type", "text/plain"}}
+	std::string body = request.dump();
+	std::string output;
+
+	auto curl = curl_easy_init();
+	curl_easy_setopt(curl, CURLOPT_URL, "https://g.api.mega.co.nz/cs");
+	curl_easy_setopt(curl, CURLOPT_POST, 1L);
+	curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body.c_str());
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &output);
+	// curl_easy_setopt(curl, CURLOPT_USERAGENT, API_AGENT);
+	// curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
+	// curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+	// curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+	// curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+	curl_easy_setopt(
+		curl, 
+		CURLOPT_WRITEFUNCTION, 
+		+[](void *buffer, size_t size, size_t nmemb, void *userp) -> size_t 
+		{
+			std::string* output = reinterpret_cast<std::string*>(userp);
+			size_t actual_size = size * nmemb;
+			output->append(reinterpret_cast<char*>(buffer), actual_size);
+			return actual_size;
+		}
 	);
 
-	json response = json::parse(r.text);
+	curl_easy_perform(curl);
+
+	json response = json::parse(output);
+
+	curl_easy_cleanup(curl);
 
 	url = response[0]["g"];
 	return response[0]["s"];
