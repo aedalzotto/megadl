@@ -1,0 +1,5 @@
+*.a
+megadl
+.vscode
+src/*.o
+lib/*.o
