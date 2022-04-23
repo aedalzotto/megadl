@@ -8,7 +8,17 @@
 
 using json = nlohmann::json;
 
+MegaDL::MegaDL()
+{
+
+}
+
 MegaDL::MegaDL(std::string url)
+{
+	build_context(url);
+}
+
+void MegaDL::build_context(std::string url)
 {
 	/* Get file ID and Key from Mega URL */
 	auto id_key = decode_url(url);
@@ -32,20 +42,14 @@ MegaDL::MegaDL(std::string url)
 	aes.SetKeyWithIV(key.data(), key.size(), iv.data());
 }
 
-std::string MegaDL::get_id()
-{
-	return id;
-}
-
-std::string MegaDL::get_url()
-{
-	return url;
-}
-
 std::pair<std::string, std::string> MegaDL::decode_url(std::string url)
 {
 	// Check if old link format
 	auto len = url.length();
+
+	if(len < 52)
+		throw std::invalid_argument("Invalid URL.");
+
 	bool old_link = url.find("#!") < len;
 
 	// Start from the last '/' and add 2 characters if old link format starting with '#!'
@@ -56,6 +60,9 @@ std::pair<std::string, std::string> MegaDL::decode_url(std::string url)
 
 	// Finally crop the url
 	std::string id = url.substr(init_pos, end_pos - init_pos);
+
+	if(id.length() != 8)
+		throw std::invalid_argument("Invalid URL ID.");
 
 	// Crop the URL to get the file key
 	end_pos++;
@@ -70,6 +77,9 @@ std::pair<std::string, std::string> MegaDL::decode_url(std::string url)
 	unsigned pad = 4 - key_len%4;
 	key.append(pad, '=');
 
+	if(key.length() != 44)
+		throw std::invalid_argument("Invalid URL key.");
+
 	return std::make_pair(id, key);
 }
 
@@ -83,7 +93,18 @@ std::string MegaDL::decode_key(std::string key)
 	decoded.resize(decoder.MaxRetrievable());
 	decoder.Get(reinterpret_cast<CryptoPP::byte*>(decoded.data()), decoded.size());
 
+	if(decoded.size() != 32)
+		throw std::invalid_argument("Invalid node key.");
+
 	return decoded;
+}
+
+std::string MegaDL::get_id()
+{
+	if(id.empty())
+		throw std::runtime_error("Empty ID. Need to build context first by calling build_context.");
+
+	return id;
 }
 
 size_t MegaDL::fetch_url()
@@ -92,8 +113,8 @@ size_t MegaDL::fetch_url()
 		{
 			{"a", "g"},
 			{"g", 1},
-			{"p", id},
-		}	
+			{"p", get_id()},
+		}
 	});
 
 	cpr::Response r = cpr::Post(
@@ -108,10 +129,18 @@ size_t MegaDL::fetch_url()
 	return response[0]["s"];
 }
 
+std::string MegaDL::get_url()
+{
+	if(url.empty())
+		throw std::runtime_error("Empty URL. Need to fetch URL first by calling fetch_url.");
+
+	return url;
+}
+
 void MegaDL::download(std::ofstream &file, std::function<bool(cpr::cpr_off_t downloadTotal, cpr::cpr_off_t downloadNow, cpr::cpr_off_t uploadTotal, cpr::cpr_off_t uploadNow, intptr_t userdata)> p_callback)
 {
 	cpr::Get(
-		cpr::Url{url},
+		cpr::Url{get_url()},
 		cpr::WriteCallback(
 			[&](std::string data, intptr_t userdata) -> bool
 			{

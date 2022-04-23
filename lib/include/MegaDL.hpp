@@ -10,15 +10,35 @@ class MegaDL {
 public:
 	/**
 	 * @brief Constructs the MegaDL object
+	 */
+	MegaDL();
+
+	/**
+	 * @brief Constructs the MegaDL object
 	 * 
-	 * @details The constructor build the cryptography context and the file ID
+	 * @details The constructor calls build_context(url)
 	 * 
 	 * @param url URL of the file to download
+	 * 
+	 * @throw std::invalid_argument on invalid URL format
 	 */
 	MegaDL(std::string url);
 
 	/**
+	 * @brief Builds the cryptography context and the file ID
+	 * 
+	 * @param url URL to download from
+	 * 
+	 * @throw std::invalid_argument on invalid URL format
+	 */
+	void build_context(std::string url);
+
+	/**
 	 * @brief Gets the file ID
+	 * 
+	 * @details Need to call build_context() or construct with URL first.
+	 * 
+	 * @throw std::runtime_error on empty ID
 	 * 
 	 * @return ID of the file extracted from the url
 	 */
@@ -29,12 +49,18 @@ public:
 	 * 
 	 * @details Should call fetch_url() first
 	 * 
+	 * @throw std::runtime_error on empty URL
+	 * 
 	 * @return The real download URL fetched from Mega
 	 */
 	std::string get_url();
 
 	/**
 	 * @brief Fetches the real download URL from Mega
+	 * 
+	 * @details Need to call build_context() or construct with URL first.
+	 * 
+	 * @throw std::runtime_error on empty ID
 	 * 
 	 * @return The size of the file to download
 	 */
@@ -44,6 +70,8 @@ public:
 	 * @brief Downloads the file
 	 * 
 	 * @details Should have called fetch_url() first
+	 * 
+	 * @throw std::runtime_error on empty URL
 	 * 
 	 * @param file File object to write to
 	 * @param p_callback Progress callback
