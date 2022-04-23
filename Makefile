@@ -31,9 +31,9 @@ $(LIBTGT): $(LIBOBJ)
 	@$(CXX) -c $< -o $@ $(CFLAGS) -I $(LIBINC)
 
 clean:
-	@$(RM) $(LIBDIR)/*.o
-	@$(RM) $(SRCDIR)/*.o
-	@$(RM) $(TARGET)
-	@$(RM) $(LIBTGT)
+	@$(RM) -f $(LIBDIR)/*.o
+	@$(RM) -f $(SRCDIR)/*.o
+	@$(RM) -f $(TARGET)
+	@$(RM) -f $(LIBTGT)
 
 .PHONY: clean lib
