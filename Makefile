@@ -5,8 +5,6 @@ CXX     = g++
 AR		= ar
 RM		= rm
 
-# SRCDIR   = src
-# INCDIR   = $(SRCDIR)/include
 SRCDIR	= src
 SRCSRC	= $(wildcard $(SRCDIR)/*.cpp)
 SRCOBJ	= $(SRCSRC:.cpp=.o)
