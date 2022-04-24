@@ -1,8 +1,8 @@
 #include <algorithm>
 
 #include <nlohmann/json.hpp>
-#include <cryptopp/secblock.h>
-#include <cryptopp/base64.h>
+#include <cryptopp/filters.h>
+#include <mbedtls/base64.h>
 
 #include <curl/curl.h>
 
@@ -31,22 +31,29 @@ void MegaDL::build_context(std::string url)
 	std::string node_key = decode_key(id_key.second);
 
 	/* Unpack AES key */
-	CryptoPP::SecByteBlock key(CryptoPP::AES::DEFAULT_KEYLENGTH);
-	reinterpret_cast<uint64_t*>(key.data())[0] = reinterpret_cast<uint64_t*>(node_key.data())[0] ^ reinterpret_cast<uint64_t*>(node_key.data())[2];
-	reinterpret_cast<uint64_t*>(key.data())[1] = reinterpret_cast<uint64_t*>(node_key.data())[1] ^ reinterpret_cast<uint64_t*>(node_key.data())[3];
+	std::string key(16, 0);
+	reinterpret_cast<uint64_t*>(key.data())[0] = 
+		reinterpret_cast<uint64_t*>(node_key.data())[0] ^ 
+		reinterpret_cast<uint64_t*>(node_key.data())[2]
+	;
+	reinterpret_cast<uint64_t*>(key.data())[1] = 
+		reinterpret_cast<uint64_t*>(node_key.data())[1] ^ 
+		reinterpret_cast<uint64_t*>(node_key.data())[3]
+	;
 
 	/* Unpack IV */
-	CryptoPP::SecByteBlock iv(CryptoPP::AES::BLOCKSIZE);
-	reinterpret_cast<uint64_t*>(iv.data())[0] = reinterpret_cast<uint64_t*>(node_key.data())[2];
-	reinterpret_cast<uint64_t*>(iv.data())[1] = 0;
+	std::string iv(16, 0);
+	reinterpret_cast<uint64_t*>(iv.data())[0] = 
+		reinterpret_cast<uint64_t*>(node_key.data())[2]
+	;
 
 	/* Initialize AES context */
-	aes.SetKeyWithIV(key.data(), key.size(), iv.data());
+	aes.SetKeyWithIV(reinterpret_cast<const CryptoPP::byte*>(key.data()), key.size(), reinterpret_cast<const CryptoPP::byte*>(iv.data()));
 }
 
 std::pair<std::string, std::string> MegaDL::decode_url(std::string url)
 {
-	// Check if old link format
+	/* Check if old link format */
 	auto len = url.length();
 
 	if(len < 52)
@@ -54,31 +61,32 @@ std::pair<std::string, std::string> MegaDL::decode_url(std::string url)
 
 	bool old_link = url.find("#!") < len;
 
-	// Start from the last '/' and add 2 characters if old link format starting with '#!'
+	/* Start from the last '/' and add 2 characters if old link format starting with '#!' */
 	auto init_pos = url.find_last_of('/') + (old_link ? 2 : 0) + 1;
 
-	// End with the last '#' or "!" if its the old link format
+	/* End with the last '#' or "!" if its the old link format */
 	auto end_pos = url.find_last_of(old_link ? '!' : '#');
 
-	// Finally crop the url
+	/* Finally crop the url */
 	std::string id = url.substr(init_pos, end_pos - init_pos);
 
 	if(id.length() != 8)
 		throw std::invalid_argument("Invalid URL ID.");
 
-	// Crop the URL to get the file key
+	/* Crop the URL to get the file key */
 	end_pos++;
 	std::string key = url.substr(end_pos, len - end_pos);
 
-	// Replace URL characters with B64 characters
+	/* Replace URL characters with B64 characters */
 	std::replace(key.begin(), key.end(), '_', '/');
 	std::replace(key.begin(), key.end(), '-', '+');
 
-	// Add padding
+	/* Add padding */
 	auto key_len = key.length();
 	unsigned pad = 4 - key_len%4;
 	key.append(pad, '=');
 
+	/* The encoded key should have 44 characters to produce a 32 byte node key */
 	if(key.length() != 44)
 		throw std::invalid_argument("Invalid URL key.");
 
@@ -87,14 +95,28 @@ std::pair<std::string, std::string> MegaDL::decode_url(std::string url)
 
 std::string MegaDL::decode_key(std::string key)
 {
-	CryptoPP::Base64Decoder decoder;
-	decoder.Put(reinterpret_cast<CryptoPP::byte*>(key.data()), key.size());
-	decoder.MessageEnd();
+	/**
+	 * Allocate space for n * 6 / 8 bytes when decoding from base64 as each
+	 * character in base64 is 6 bits and each character in our string is 8 bits
+	 */
+	std::string decoded(key.size()*3/4, 0);
+	size_t olen = 0;
 
-	std::string decoded;
-	decoded.resize(decoder.MaxRetrievable());
-	decoder.Get(reinterpret_cast<CryptoPP::byte*>(decoded.data()), decoded.size());
+	mbedtls_base64_decode(
+		reinterpret_cast<unsigned char*>(decoded.data()),
+		decoded.size(),
+		&olen,
+		reinterpret_cast<const unsigned char*>(key.c_str()),
+		key.size()
+	);
 
+	/**
+	 * The encoded base64 is (usually?) 43 characters long. With padding it goes
+	 * to 44. When we calculate the decoded size, we need to allocate 33 bytes.
+	 * But the last encoded character is padding, and combined with the last 
+	 * valid character, it should produce a 32 byte node key.
+	 */
+	decoded.resize(olen);
 	if(decoded.size() != 32)
 		throw std::invalid_argument("Invalid node key.");
 
